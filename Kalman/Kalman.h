@@ -6,7 +6,8 @@
 #define KALMAN_H
 
 #include<Eigen/Dense>
-
+#include<opencv2/opencv.hpp>
+#include"../Armor/Armor.h"
 
 class Kalman {
 private:
@@ -26,6 +27,6 @@ public:
     Eigen::VectorXd getX();
 };
 
-
+cv::Point usingKalman(std::vector<Kalman>& kl,double fps,Armor* TargetArmors,Armor* LastTarget);
 
 #endif //KALMAN_H

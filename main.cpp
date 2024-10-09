@@ -10,12 +10,17 @@
 
 /*
  * todo
+ * 1画出预测和实际的轨迹线
  * 2优化目标选择
+ * 3给卡尔曼加条件
  */
 
 int main()
 {
     std::vector<cv::Point> predictPoint;
+    std::vector<Kalman> kalmanList;
+    Kalman iniKalman;
+    kalmanList.push_back(iniKalman);
     int JudgeColor;
     std::cin>>JudgeColor;
     std::string FilePath;
@@ -127,33 +132,18 @@ int main()
                 if(minDistanceID>=0 && minDistanceID<TargetArmors.size())
                     TargetArmors[minDistanceID].ArmorDraw(frame,1);
                 if (LastTarget.getID() != -1) {
-                    Kalman kalman;
-                    Eigen::VectorXd X_in(6);
-                    double dt = 1 / fps;
-                    if (minDistanceID >= 0 && minDistanceID < TargetArmors.size()) {
-                        double vx = (TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(0) - LastTarget.getArmorInfo().tvec.at<double>(0)) / dt;
-                        double vy = (TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(1) - LastTarget.getArmorInfo().tvec.at<double>(1)) / dt;
-                        double vz = (TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(2) - LastTarget.getArmorInfo().tvec.at<double>(2)) / dt;
-
-                        X_in << LastTarget.getArmorInfo().tvec.at<double>(0), LastTarget.getArmorInfo().tvec.at<double>(1), LastTarget.getArmorInfo().tvec.at<double>(2), vx, vy, vz;
-                        kalman.Initialize(X_in);
-                        kalman.setF(dt);
-
-                        kalman.Predict();
-
-                        Eigen::VectorXd z(3);
-                        z << TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(0),
-                             TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(1),
-                             TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(2);
-
-                        kalman.MeasurementUpdate(z);
-                        Eigen::VectorXd predictX = kalman.getX();
-                        cv::Point predictP=projectTo2D(predictX);
-                        predictPoint.push_back(predictP);
-                        cv::circle(frame,predictP,5,cv::Scalar(0,0,255),-1);
-                    } else {
-                        std::cerr << "Invalid minDistanceID: " << minDistanceID << std::endl;
+                    if(std::abs(LastTarget.getArmorInfo().center.x-TargetArmors[minDistanceID].getArmorInfo().center.x)>100) {//如果切换了目标，重建卡尔曼
+                        Kalman newKalman;
+                        kalmanList.erase(kalmanList.begin());
+                        kalmanList.push_back(newKalman);
                     }
+                    cv::Point predictP=usingKalman(kalmanList,fps,&TargetArmors[minDistanceID],&LastTarget);
+                    predictPoint.push_back(predictP);
+                    //std::cout<<predictP<<std::endl;
+                    cv::circle(frame,predictP,5,cv::Scalar(0,0,255),-1);
+                }
+                else {
+                        std::cerr << "Invalid minDistanceID: " << minDistanceID << std::endl;
                 }
             }
         }

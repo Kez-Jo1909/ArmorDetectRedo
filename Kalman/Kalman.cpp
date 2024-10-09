@@ -5,6 +5,8 @@
 #include "Kalman.h"
 #include<Eigen/Dense>
 #include<iostream>
+#include"../Armor/Armor.h"
+#include"../camera/Camera.h"
 
 void Kalman::Initialize(const Eigen::VectorXd& X_in) {
     X_=X_in;
@@ -42,6 +44,12 @@ Kalman::Kalman() {
     R_ << 0.01, 0,0,
         0,0.01,0,
       0,0,0.02;
+    P_<<1e-1,0,0,0,0,0,
+    0,1e-1,0,0,0,0,
+    0,0,1e-1,0,0,0,
+    0,0,0,1e-1,0,0,
+    0,0,0,0,1e-1,0,
+    0,0,0,0,0,1e-1;
 
 }
 
@@ -59,3 +67,26 @@ Eigen::VectorXd Kalman::getX() {
     return X_;
 }
 
+cv::Point usingKalman(std::vector<Kalman>& kl,double fps,Armor* TargetArmors,Armor* LastTarget) {
+    Eigen::VectorXd X_in(6);
+    double dt = 1 / fps;
+    double vx = (TargetArmors->getArmorInfo().tvec.at<double>(0) - LastTarget->getArmorInfo().tvec.at<double>(0)) / dt;
+    double vy = (TargetArmors->getArmorInfo().tvec.at<double>(1) - LastTarget->getArmorInfo().tvec.at<double>(1)) / dt;
+    double vz = (TargetArmors->getArmorInfo().tvec.at<double>(2) - LastTarget->getArmorInfo().tvec.at<double>(2)) / dt;
+
+    X_in << LastTarget->getArmorInfo().tvec.at<double>(0), LastTarget->getArmorInfo().tvec.at<double>(1), LastTarget->getArmorInfo().tvec.at<double>(2), vx, vy, vz;
+    kl[0].Initialize(X_in);
+    kl[0].setF(dt);
+
+    kl[0].Predict();
+
+    Eigen::VectorXd z(3);
+    z << TargetArmors->getArmorInfo().tvec.at<double>(0),
+         TargetArmors->getArmorInfo().tvec.at<double>(1),
+         TargetArmors->getArmorInfo().tvec.at<double>(2);
+
+    kl[0].MeasurementUpdate(z);
+    Eigen::VectorXd predictX = kl[0].getX();
+    cv::Point predictP=projectTo2D(predictX);
+    return predictP;
+}
