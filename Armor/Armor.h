@@ -54,6 +54,7 @@ public:
     int getID();
     void renewArmor(ArmorInfo ArIF);
     int whetherFound();
+    ArmorInfo getArmorInfo();
 };
 
 #endif //ARMOR_H

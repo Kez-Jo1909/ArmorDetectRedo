@@ -1,18 +1,21 @@
 #include <iostream>
 #include<opencv2/opencv.hpp>
+
+#include "camera/Camera.h"
 #include"Defines.h"
 #include "Detect/Detect.h"
 #include"PreProcess/PreProcess.h"
 #include"Armor/Armor.h"
+#include "Kalman/Kalman.h"
 
 /*
  * todo
- * 1给目标加上卡尔曼
  * 2优化目标选择
  */
 
 int main()
 {
+    std::vector<cv::Point> predictPoint;
     int JudgeColor;
     std::cin>>JudgeColor;
     std::string FilePath;
@@ -27,6 +30,8 @@ int main()
         std::cerr<<"Error Input"<<std::endl;
         return 0;
     }
+    int minDistanceID=0;//开始选择目标
+    double minDistance=10000;
     cv::VideoCapture cap(FilePath);
     cv::Mat frame;
     std::vector<LightRect> DetectedLight;
@@ -35,6 +40,7 @@ int main()
     LightPair LightPair;
     Armor LastTarget;
     double fps=1000/cap.get(cv::CAP_PROP_FPS);
+    //std::cout<<LastTarget.getID()<<std::endl;//应当是-1
     while(1) {
         cap>>frame;
         auto start = std::chrono::steady_clock::now();
@@ -64,12 +70,10 @@ int main()
                             if(TargetArmors[j].getID()==DetectedArmor[i].getPre()) {
                                 if(TargetArmors[j].whetherFound()==1) {
                                     if(dis<TargetArmors[j].getDistance()) {
-                                        //std::cout<<"Found old target class and replaced bad target"<<std::endl;
                                         TargetArmors[j].renewArmor(DetectedArmor[i].GetArmorInfo());
                                     }
                                 }
                                 else {
-                                    //std::cout<<"Found old target class and reset target"<<std::endl;
                                     TargetArmors[j].renewArmor(DetectedArmor[i].GetArmorInfo());
                                 }
                                 isJudged=1;
@@ -78,68 +82,81 @@ int main()
                         }
                         if(isJudged==0) {
                             Armor newTarget(DetectedArmor[i].GetArmorInfo());
-                            //std::cout<<"create new target class"<<std::endl;
                             TargetArmors.push_back(newTarget);
                         }
                         DetectedArmor[i].ArmorDraw(frame);
                     }
                 }
-                int minDistanceID=0;//开始选择目标
-                double minDistance=10000;
-                //std::cout<<TargetArmors.size()<<std::endl;
-                for(int i=0;i<TargetArmors.size();i++) {
-                    if(TargetArmors[i].getDistance()<minDistance && TargetArmors[i].whetherFound()==1) {
-                        //std::cout<<(minDistance-TargetArmors[i].getDistance())<<std::endl;
-                        if((minDistance-TargetArmors[i].getDistance())<300) {//小于阈值，作判定
-                            //std::cout<<"<200,进入判定"<<std::endl;
-                            if(TargetArmors[i].getID()==LastTarget.getID()) {//如果近的id与上一帧目标相同
-                                minDistance=TargetArmors[i].getDistance();
-                                minDistanceID=i;
-                            }
-                            else {//如果近的id与原目标不同
-                                if(TargetArmors[minDistanceID].getID()==LastTarget.getID()) {//远的相同,不切换
-                                    continue;
-                                }
-                                else {
+                minDistanceID=-1;//开始选择目标
+                minDistance=10000;
+                if(LastTarget.getID()!=-1) {
+                    for(int i=0;i<TargetArmors.size();i++) {
+                        if(TargetArmors[i].getDistance()<minDistance && TargetArmors[i].whetherFound()==1) {
+                            if((minDistance-TargetArmors[i].getDistance())<300) {//小于阈值，作判定
+                                if(TargetArmors[i].getID()==LastTarget.getID()) {//如果近的id与上一帧目标相同
                                     minDistance=TargetArmors[i].getDistance();
                                     minDistanceID=i;
                                 }
+                                else {//如果近的id与原目标不同
+                                    if(TargetArmors[minDistanceID].getID()==LastTarget.getID()) {//远的相同,不切换
+                                        continue;
+                                    }
+                                    else {
+                                        minDistance=TargetArmors[i].getDistance();
+                                        minDistanceID=i;
+                                    }
+                                }
+                            }
+                            else {//大于200,切换
+                                minDistance=TargetArmors[i].getDistance();
+                                minDistanceID=i;
                             }
                         }
-                        else {//大于200,切换
+                        TargetArmors[i].ArmorDraw(frame,0);
+                    }
+                }
+                else {
+                    for(int i=0;i<TargetArmors.size();i++) {
+                        if(TargetArmors[i].getDistance()<minDistance && TargetArmors[i].whetherFound()==1) {
                             minDistance=TargetArmors[i].getDistance();
                             minDistanceID=i;
                         }
-                        // if((minDistance-TargetArmors[i].getDistance())>200 || TargetArmors[i].getID()==LastTarget.getID()) {
-                        //     /*
-                        //      * 如果距离相差>200或者距离较近的id与上一帧的id相同，则切换
-                        //      */
-                        //     minDistance=TargetArmors[i].getDistance();
-                        //     minDistanceID=i;
-                        // }
-                        // else {
-                        //     if(TargetArmors[minDistanceID].getID()==LastTarget.getID()) {
-                        //         /*
-                        //          * 如果距离稍远的id与上一帧的目标id相同，较近的id不同，不切换目标
-                        //          */
-                        //         continue;
-                        //     }
-                        //     else{
-                        //         /*
-                        //          * 如果距离稍远的id与上一帧的目标id不同，切换目标
-                        //          */
-                        //         minDistance=TargetArmors[i].getDistance();
-                        //         minDistanceID=i;
-                        //     }
-                        // }
+                        TargetArmors[i].ArmorDraw(frame,0);
                     }
-                    LastTarget=TargetArmors[minDistanceID];
-                    TargetArmors[i].ArmorDraw(frame,0);
                 }
-                TargetArmors[minDistanceID].ArmorDraw(frame,1);
+                if(minDistanceID>=0 && minDistanceID<TargetArmors.size())
+                    TargetArmors[minDistanceID].ArmorDraw(frame,1);
+                if (LastTarget.getID() != -1) {
+                    Kalman kalman;
+                    Eigen::VectorXd X_in(6);
+                    double dt = 1 / fps;
+                    if (minDistanceID >= 0 && minDistanceID < TargetArmors.size()) {
+                        double vx = (TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(0) - LastTarget.getArmorInfo().tvec.at<double>(0)) / dt;
+                        double vy = (TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(1) - LastTarget.getArmorInfo().tvec.at<double>(1)) / dt;
+                        double vz = (TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(2) - LastTarget.getArmorInfo().tvec.at<double>(2)) / dt;
+
+                        X_in << LastTarget.getArmorInfo().tvec.at<double>(0), LastTarget.getArmorInfo().tvec.at<double>(1), LastTarget.getArmorInfo().tvec.at<double>(2), vx, vy, vz;
+                        kalman.Initialize(X_in);
+                        kalman.setF(dt);
+
+                        kalman.Predict();
+
+                        Eigen::VectorXd z(3);
+                        z << TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(0),
+                             TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(1),
+                             TargetArmors[minDistanceID].getArmorInfo().tvec.at<double>(2);
+
+                        kalman.MeasurementUpdate(z);
+                        Eigen::VectorXd predictX = kalman.getX();
+                        cv::Point predictP=projectTo2D(predictX);
+                        predictPoint.push_back(predictP);
+                        cv::circle(frame,predictP,5,cv::Scalar(0,0,255),-1);
+                    } else {
+                        std::cerr << "Invalid minDistanceID: " << minDistanceID << std::endl;
+                    }
+                }
             }
         }
-
         for(int i=0;i<TargetArmors.size();i++) {
             TargetArmors[i].renew();
         }
@@ -148,6 +165,9 @@ int main()
         cv::putText(frame,FPS,cv::Point(10,45),cv::FONT_HERSHEY_SIMPLEX, 2, cv::Scalar(255, 255, 255), 2);
         cv::imshow("video", frame);
         //int ret=cv::waitKey();
+        if(minDistanceID >= 0 && minDistanceID < TargetArmors.size()) {
+            LastTarget=TargetArmors[minDistanceID];
+        }
         int ret=cv::waitKey(1000/cap.get(cv::CAP_PROP_FPS));
         if(ret==80 || ret==112) {//按p/P暂停
             cv::waitKey();   //此处应该有判定但是无所谓了

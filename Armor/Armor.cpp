@@ -5,7 +5,7 @@
 #include "Armor.h"
 #include<opencv2/opencv.hpp>
 #include<openvino/openvino.hpp>
-#include"../Camera.h"
+#include"../camera/Camera.h"
 
 ArmorToPair::ArmorToPair(LightRect lr1, LightRect lr2) {
     if(lr1.rR.center.x <= lr2.rR.center.x) {
@@ -153,27 +153,6 @@ double ArmorToPair::GetDistance(cv::Mat img) {
 
     if(Success) {
         distance = cv::norm(tvec);
-        //std::cout<<predict<<":";
-        //std::cout<<"Armor Distance:"<<distance<<std::endl;
-        //
-        //
-        // // 定义坐标轴的 3D 终点（在物体坐标系中）
-        // std::vector<cv::Point3f> axisPoints = {
-        //     {0, 0, 0},    // 原点
-        //     {50, 0, 0},   // x 轴方向
-        //     {0, 50, 0},   // y 轴方向
-        //     {0, 0, -50},  // z 轴方向
-        // };
-        // // 用于存储投影后的 2D 图像点
-        // std::vector<cv::Point2f> imageAxisPoints;
-        //
-        // // 将 3D 坐标轴投影到 2D 图像上
-        // cv::projectPoints(axisPoints, rvec, tvec, cameraMatrix, distCoeffs, imageAxisPoints);
-        //
-        // // 在图像上画坐标轴
-        // cv::line(img, imageAxisPoints[0], imageAxisPoints[1], cv::Scalar(0, 0, 255), 2); // x 轴 (红色)
-        // cv::line(img, imageAxisPoints[0], imageAxisPoints[2], cv::Scalar(0, 255, 0), 2); // y 轴 (绿色)
-        // cv::line(img, imageAxisPoints[0], imageAxisPoints[3], cv::Scalar(255, 0, 0), 2); // z 轴 (蓝色)
     }
     else {
         std::cerr<<"solvePnP failed"<<std::endl;
@@ -252,11 +231,17 @@ int Armor::whetherFound() {
 Armor::Armor() {
     info.id=-1;
     isDetectedThisFrame=0;
+    info.center.x=0;
+    info.center.y=0;
 }
 
 
 void Armor::Calculate() {
     //卡尔曼
+}
+
+ArmorInfo Armor::getArmorInfo() {
+    return info;
 }
 
 
